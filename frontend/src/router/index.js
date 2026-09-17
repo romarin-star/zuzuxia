@@ -23,11 +23,13 @@ const routes = [
       {
         path: '',
         name: 'home',
-        component: () => import('@/views/Home.vue'),
+        component: () => import('@/views/user/Home.vue'),
         meta: { title: '首页' }
       }
       // TODO 何金泉：物品大厅 /items、物品详情 /items/:id
+      //              → views/user/ItemList.vue、views/user/ItemDetail.vue
       // TODO 王浩名：发布物品 /publish、订单中心 /orders、钱包 /wallet、个人中心 /profile
+      //              → views/user/Publish.vue、views/user/OrderList.vue 等
     ]
   },
   {
@@ -43,6 +45,7 @@ const routes = [
       }
       // TODO 伍嘉豪：用户管理 /admin/users、物品管理 /admin/items、
       //              订单管理 /admin/orders、分类管理 /admin/categories
+      //              → views/admin/UserList.vue、views/admin/ItemList.vue 等
     ]
   },
   {

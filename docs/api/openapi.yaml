@@ -76,9 +76,15 @@ paths:
               $ref: '#/components/schemas/RegisterRequest'
       responses:
         '200':
-          $ref: '#/components/responses/OkResult'
-        '200#1001':
-          description: 用户名已存在
+          description: 注册成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Result'
+        '400':
+          description: 参数校验失败
+        '409':
+          description: 用户名已存在（业务码 1001）
 
   /auth/login:
     post:

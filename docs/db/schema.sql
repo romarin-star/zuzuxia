@@ -153,7 +153,7 @@ CREATE TABLE `wallet_transaction` (
     `id`            BIGINT        NOT NULL AUTO_INCREMENT COMMENT '主键',
     `user_id`       BIGINT        NOT NULL                COMMENT '用户 user.id',
     `type`          VARCHAR(30)   NOT NULL
-                    COMMENT 'RECHARGE/DEPOSIT_FREEZE/DEPOSIT_UNFREEZE/DEPOSIT_DEDUCT/RENT_PAY/RENT_INCOME/DEPOSIT_REFUND',
+                    COMMENT 'RECHARGE/RENT_PAY/RENT_REFUND/RENT_INCOME/DEPOSIT_FREEZE/DEPOSIT_REFUND/DEPOSIT_DEDUCT',
     `amount`        DECIMAL(10,2) NOT NULL                COMMENT '变动金额，正数收入、负数支出',
     `balance_after` DECIMAL(10,2) NOT NULL                COMMENT '变动后可用余额',
     `order_id`      BIGINT        DEFAULT NULL            COMMENT '关联订单，充值等无单可空',

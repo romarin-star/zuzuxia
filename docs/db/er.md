@@ -188,4 +188,13 @@ erDiagram
 | 确认归还 → FINISHED | 押金解冻退还租用人；租金入账出租人 | `DEPOSIT_REFUND`、`RENT_INCOME` |
 | 管理端介入扣押金 | 从冻结押金扣款给出租人 | `DEPOSIT_DEDUCT`、`RENT_INCOME` |
 
+此外还有一个**与订单无关**的类型：
+
+| 场景 | 资金动作 | 产生的流水类型 |
+|---|---|---|
+| 用户主动充值 | 增加可用余额 | `RECHARGE` |
+
+`wallet_transaction.type` 共 7 个取值，与 `openapi.yaml` 的 `WalletTransactionVO.type` 枚举、
+前端 `utils/constants.js` 的 `WALLET_TYPE_META` **三处必须保持一致**，改动时请同步。
+
 `data.sql` 中的流水已与 `user.balance` / `user.frozen_balance` **严格对账**，可直接用来核对实现是否正确。

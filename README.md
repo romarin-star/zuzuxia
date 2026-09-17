@@ -21,7 +21,7 @@
 | HTTP 客户端 | axios | 1.x |
 | 后端框架 | Spring Boot | **3.5.3** |
 | 后端语言 | Java | **21** |
-| 构建工具 | Maven Wrapper | 3.9.16（无需安装 Maven） |
+| 构建工具 | Maven Wrapper | wrapper 脚本 3.3.4 / Maven 3.9.16（**无需安装 Maven**） |
 | 数据访问 | MyBatis-Plus | 3.5.17 |
 | 认证 | JWT（jjwt） | 0.12.7 |
 | 接口文档 | Knife4j + 手写 OpenAPI 3.0 | 4.5.0 |
@@ -200,7 +200,7 @@ zuzuxia/
 
 | 文档 | 内容 |
 |---|---|
-| [`docs/specs/2026-09-17-zuzuxia-底座设计.md`](docs/specs/2026-09-17-zuzuxia-底座设计.md) | 技术选型、目录结构、9 张表设计、订单状态机与资金时序、45 个接口清单、错误码 |
+| [`docs/specs/2026-09-17-zuzuxia-底座设计.md`](docs/specs/2026-09-17-zuzuxia-底座设计.md) | 技术选型、目录结构、9 张表设计、订单状态机与资金时序、43 个路径 / 51 个操作、15 个业务错误码 |
 | [`docs/plans/2026-09-17-zuzuxia-底座实施计划.md`](docs/plans/2026-09-17-zuzuxia-底座实施计划.md) | 17 个可执行任务的实施计划 |
 | [`docs/api/openapi.yaml`](docs/api/openapi.yaml) | **接口唯一依据** |
 | [`docs/db/er.md`](docs/db/er.md) | ER 图 + 关键设计决策（为什么 `item` 不存"租用中"、为什么金额要快照） |
