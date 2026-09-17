@@ -1,0 +1,13 @@
+# 本地配置模板
+#
+# 用法：
+#   1. 把本文件复制为同目录下的 application-local.yml
+#   2. 填入你自己的 MySQL 密码
+#   3. application-local.yml 已被 .gitignore 忽略，不会提交到仓库
+#
+# 也可以在 IDEA 的运行配置里加 VM 参数：-Dspring.profiles.active=dev,local
+
+spring:
+  datasource:
+    username: root
+    password: 在这里填写你的 MySQL 密码

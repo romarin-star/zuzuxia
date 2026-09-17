@@ -1,0 +1,19 @@
+# 开发环境配置
+#
+# 数据库密码优先从环境变量 MYSQL_PASSWORD 读取，未设置时用默认值 root。
+# 若你的密码不是 root，推荐任选一种方式：
+#   1) 复制 application-local.yml.example 为 application-local.yml 并填写（该文件已被 .gitignore 忽略）
+#   2) 设置环境变量：set MYSQL_PASSWORD=你的密码
+#
+# 注意：application-local.yml 的优先级高于本文件，会覆盖同名配置。
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/zuzuxia?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:root}
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      connection-timeout: 10000
+      pool-name: ZuzuxiaHikariPool
