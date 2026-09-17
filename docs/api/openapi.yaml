@@ -1,0 +1,1482 @@
+openapi: 3.0.3
+
+info:
+  title: 租租侠租赁平台 API
+  description: |
+    「租租侠」闲置物品租赁平台的后端接口规范。
+
+    **本文档是全队唯一对接依据**：代码与文档不一致时，以文档为准并修改代码。
+    接口变更须当天更新本文档并通知前后端全员。
+
+    ## 三条全局约定
+
+    1. 所有接口以 `/api` 开头
+    2. 所有响应统一为 `{ code, message, data }`
+    3. 分页入参 `page`（从 1 开始）/ `size`，返回 `{ total, list }`
+
+    ## 认证方式
+
+    除标注 `security: []` 的公开接口外，均需请求头：
+
+    ```
+    Authorization: Bearer <token>
+    ```
+
+    ## 业务码
+
+    见 `ResultCode` 枚举，业务码从 1001 起。响应体中的 `message` 是**给用户看的中文提示**，
+    前端直接展示即可，不要自行拼错误文案。
+  version: 1.0.0
+  contact:
+    name: 租租侠项目组
+    url: https://github.com/romarin-star/zuzuxia
+
+servers:
+  - url: http://localhost:8080/api
+    description: 本地开发环境（前端通过 Vite proxy 访问，前端代码中写 /api 即可）
+
+tags:
+  - name: 认证
+    description: 注册、登录、获取当前用户
+  - name: 用户
+    description: 个人资料与信用档案
+  - name: 分类
+    description: 物品分类字典（公开）
+  - name: 物品
+    description: 物品大厅、发布、编辑、可租时段、图片
+  - name: 收藏
+    description: 收藏夹
+  - name: 订单
+    description: 租借申请与状态流转
+  - name: 钱包
+    description: 余额、充值、流水
+  - name: 评价
+    description: 订单完成后的双向评价
+  - name: 管理端
+    description: 需 ADMIN 角色
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  # ==========================================================
+  # 认证
+  # ==========================================================
+  /auth/register:
+    post:
+      tags: [认证]
+      summary: 用户注册
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+        '200#1001':
+          description: 用户名已存在
+
+  /auth/login:
+    post:
+      tags: [认证]
+      summary: 用户登录
+      description: 成功后返回 JWT，前端存入 localStorage 并在后续请求的 Authorization 头中携带。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/LoginResponse'
+
+  /auth/me:
+    get:
+      tags: [认证]
+      summary: 获取当前登录用户信息
+      description: 进入个人中心、钱包页时应调用以刷新余额与信用分。
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserVO'
+
+  # ==========================================================
+  # 用户
+  # ==========================================================
+  /user/profile:
+    put:
+      tags: [用户]
+      summary: 修改个人资料
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /user/password:
+    put:
+      tags: [用户]
+      summary: 修改密码
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /user/me/credit:
+    get:
+      tags: [用户]
+      summary: 我的信用档案
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CreditVO'
+
+  /user/{id}/credit:
+    get:
+      tags: [用户]
+      summary: 查看他人信用档案
+      description: 物品详情页展示出租人信用时调用。
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CreditVO'
+
+  # ==========================================================
+  # 分类
+  # ==========================================================
+  /categories:
+    get:
+      tags: [分类]
+      summary: 分类列表
+      security: []
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CategoryVO'
+
+  # ==========================================================
+  # 物品
+  # ==========================================================
+  /items:
+    get:
+      tags: [物品]
+      summary: 物品大厅（分页 + 分类 + 关键词 + 排序）
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: categoryId
+          in: query
+          schema: { type: integer, format: int64 }
+        - name: keyword
+          in: query
+          description: 匹配标题
+          schema: { type: string }
+        - name: sort
+          in: query
+          description: '排序方式：latest 最新 / priceAsc 价格升 / priceDesc 价格降 / hot 最热'
+          schema:
+            type: string
+            enum: [latest, priceAsc, priceDesc, hot]
+            default: latest
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PageResult'
+                          - type: object
+                            properties:
+                              list:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/ItemVO'
+    post:
+      tags: [物品]
+      summary: 发布物品
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemCreateRequest'
+      responses:
+        '200':
+          description: 返回新建物品 id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data: { type: integer, format: int64 }
+
+  /items/hot:
+    get:
+      tags: [物品]
+      summary: 热度排行榜
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10, maximum: 50 }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ItemVO'
+
+  /items/recommend:
+    get:
+      tags: [物品]
+      summary: 推荐榜单
+      security: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10, maximum: 50 }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ItemVO'
+
+  /items/mine:
+    get:
+      tags: [物品]
+      summary: 我发布的物品
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ON_SHELF, OFF_SHELF, DELISTED]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PageResult'
+                          - type: object
+                            properties:
+                              list:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/ItemVO'
+
+  /items/{id}:
+    get:
+      tags: [物品]
+      summary: 物品详情
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ItemDetailVO'
+    put:
+      tags: [物品]
+      summary: 编辑物品
+      description: 仅物品所有者可操作。
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemUpdateRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+    delete:
+      tags: [物品]
+      summary: 删除物品
+      description: 有进行中订单时不可删除，返回 1015。
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /items/{id}/shelf:
+    put:
+      tags: [物品]
+      summary: 上架 / 下架
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - name: onShelf
+          in: query
+          required: true
+          description: true 上架，false 下架
+          schema: { type: boolean }
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /items/{id}/available-periods:
+    get:
+      tags: [物品]
+      summary: 查询可租时间段
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/AvailablePeriodVO'
+    post:
+      tags: [物品]
+      summary: 新增可租时间段
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AvailablePeriodRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /items/{id}/available-periods/{periodId}:
+    delete:
+      tags: [物品]
+      summary: 删除可租时间段
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - name: periodId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /items/{id}/images:
+    post:
+      tags: [物品]
+      summary: 上传物品图片
+      description: multipart/form-data，单文件不超过 10MB。返回可访问的图片 URL。
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: 返回图片 URL
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data: { type: string, example: /uploads/2026/09/xxx.jpg }
+
+  # ==========================================================
+  # 收藏
+  # ==========================================================
+  /favorites:
+    get:
+      tags: [收藏]
+      summary: 我的收藏
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PageResult'
+                          - type: object
+                            properties:
+                              list:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/ItemVO'
+
+  /favorites/{itemId}:
+    post:
+      tags: [收藏]
+      summary: 收藏物品
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+    delete:
+      tags: [收藏]
+      summary: 取消收藏
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  # ==========================================================
+  # 订单
+  # ==========================================================
+  /orders:
+    post:
+      tags: [订单]
+      summary: 提交租借申请
+      description: |
+        创建订单，状态置为 `PENDING`，**此时不动任何资金**，仅校验：
+        - 物品处于上架状态（否则 1008）
+        - 不是自己的物品（否则 1006）
+        - 租期落在出租人设定的可租时段内，且不与进行中订单重叠（否则 1004）
+        - 余额 ≥ 租金 + 押金（否则 1003）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+      responses:
+        '200':
+          description: 返回新建订单 id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data: { type: integer, format: int64 }
+    get:
+      tags: [订单]
+      summary: 我的订单
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: type
+          in: query
+          required: true
+          description: rented 我租入的 / lent 我租出的
+          schema:
+            type: string
+            enum: [rented, lent]
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PageResult'
+                          - type: object
+                            properties:
+                              list:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/OrderVO'
+
+  /orders/{id}:
+    get:
+      tags: [订单]
+      summary: 订单详情
+      description: 仅订单双方当事人可见，否则 1014。
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OrderVO'
+
+  /orders/{id}/confirm:
+    put:
+      tags: [订单]
+      summary: 出租人同意 → RESERVED
+      description: |
+        仅 `PENDING` 且操作人为出租人时可用。
+        **资金动作**：扣租金（托管）+ 冻结押金。
+        **二次校验**：再次检查时段是否已被其他订单占用，防止两人同时被同意。
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /orders/{id}/reject:
+    put:
+      tags: [订单]
+      summary: 出租人拒绝 → REJECTED
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - name: reason
+          in: query
+          required: true
+          schema: { type: string, maxLength: 255 }
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /orders/{id}/cancel:
+    put:
+      tags: [订单]
+      summary: 租用人取消 → CANCELLED
+      description: 仅 `PENDING` 或 `RESERVED` 状态可取消。**资金动作**：退还租金 + 解冻押金。
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /orders/{id}/pick:
+    put:
+      tags: [订单]
+      summary: 租用人确认取件 → RENTING
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /orders/{id}/return:
+    put:
+      tags: [订单]
+      summary: 租用人发起归还 → RETURNING
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /orders/{id}/finish:
+    put:
+      tags: [订单]
+      summary: 出租人确认归还 → FINISHED
+      description: '**资金动作**：押金解冻退还租用人；租金入账出租人。此后双方可互评。'
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  # ==========================================================
+  # 钱包
+  # ==========================================================
+  /wallet:
+    get:
+      tags: [钱包]
+      summary: 我的余额
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/WalletVO'
+
+  /wallet/recharge:
+    post:
+      tags: [钱包]
+      summary: 充值
+      description: 本地演示用，直接增加可用余额，不接真实支付。
+      parameters:
+        - name: amount
+          in: query
+          required: true
+          schema: { type: number, format: double, minimum: 0.01, maximum: 100000 }
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /wallet/transactions:
+    get:
+      tags: [钱包]
+      summary: 交易流水（分页，按时间倒序）
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PageResult'
+                          - type: object
+                            properties:
+                              list:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/WalletTransactionVO'
+
+  # ==========================================================
+  # 评价
+  # ==========================================================
+  /reviews:
+    post:
+      tags: [评价]
+      summary: 提交评价
+      description: |
+        订单必须为 `FINISHED`，否则 1007。
+        同一订单同一人只能评一次，否则 1013（数据库唯一索引 `uk_order_reviewer` 兜底）。
+        评分会影响被评价人的信用分。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewCreateRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /reviews/item/{itemId}:
+    get:
+      tags: [评价]
+      summary: 某物品收到的评价
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PageResult'
+                          - type: object
+                            properties:
+                              list:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/ReviewVO'
+
+  /reviews/user/{userId}:
+    get:
+      tags: [评价]
+      summary: 某用户收到的评价（信用档案页）
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PageResult'
+                          - type: object
+                            properties:
+                              list:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/ReviewVO'
+
+  # ==========================================================
+  # 管理端（全部需要 ADMIN 角色）
+  # ==========================================================
+  /admin/users:
+    get:
+      tags: [管理端]
+      summary: 用户列表
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: keyword
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [NORMAL, BANNED] }
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PageResult'
+                          - type: object
+                            properties:
+                              list:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/UserVO'
+
+  /admin/users/{id}/status:
+    put:
+      tags: [管理端]
+      summary: 封禁 / 解封用户
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - name: banned
+          in: query
+          required: true
+          schema: { type: boolean }
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /admin/items:
+    get:
+      tags: [管理端]
+      summary: 物品列表
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: keyword
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/ItemStatus'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PageResult'
+                          - type: object
+                            properties:
+                              list:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/ItemVO'
+
+  /admin/items/{id}/status:
+    put:
+      tags: [管理端]
+      summary: 违规下架 / 恢复上架
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+        - name: delisted
+          in: query
+          required: true
+          description: true 违规下架（置为 DELISTED），false 恢复上架
+          schema: { type: boolean }
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /admin/orders:
+    get:
+      tags: [管理端]
+      summary: 订单列表
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/PageResult'
+                          - type: object
+                            properties:
+                              list:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/OrderVO'
+
+  /admin/orders/{id}/deduct:
+    put:
+      tags: [管理端]
+      summary: 介入处理 —— 从冻结押金中扣款赔付出租人
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, remark]
+              properties:
+                amount:
+                  type: number
+                  format: double
+                  description: 扣款金额，不得超过该订单冻结的押金
+                remark:
+                  type: string
+                  maxLength: 255
+                  example: 物品损坏，双方协商扣除押金
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /admin/categories:
+    get:
+      tags: [管理端]
+      summary: 分类列表（含停用）
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CategoryVO'
+    post:
+      tags: [管理端]
+      summary: 新增分类
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /admin/categories/{id}:
+    put:
+      tags: [管理端]
+      summary: 编辑分类
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+    delete:
+      tags: [管理端]
+      summary: 删除分类
+      description: 分类下仍有物品时应拒绝删除。
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      responses:
+        '200':
+          $ref: '#/components/responses/OkResult'
+
+  /admin/stats:
+    get:
+      tags: [管理端]
+      summary: 管理端概览统计
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AdminStatsVO'
+
+  /ping:
+    get:
+      tags: [认证]
+      summary: 连通性探测
+      security: []
+      description: 前端首页用它确认 Vite proxy → 后端链路是否打通。不查数据库。
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Result'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          app:     { type: string, example: zuzuxia }
+                          version: { type: string, example: 1.0.0 }
+                          time:    { type: string, example: '2026-09-17T17:17:59' }
+
+
+# ============================================================
+# 组件
+# ============================================================
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 登录后获得，格式 `Bearer <token>`
+
+  parameters:
+    PathId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+    Page:
+      name: page
+      in: query
+      description: 页码，从 1 开始
+      schema: { type: integer, minimum: 1, default: 1 }
+    Size:
+      name: size
+      in: query
+      description: 每页条数，最大 100
+      schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
+
+  responses:
+    OkResult:
+      description: 成功（无数据体）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Result'
+
+  schemas:
+
+    # ---------- 通用 ----------
+    Result:
+      type: object
+      description: 统一响应体。业务码见 ResultCode 枚举。
+      properties:
+        code:
+          type: integer
+          description: 200 成功；400/401/403/404/409/500 通用；1001+ 业务码
+          example: 200
+        message:
+          type: string
+          description: 已本地化的提示语，可直接展示给用户
+          example: success
+        data:
+          nullable: true
+          description: 业务数据，失败时为 null
+
+    PageResult:
+      type: object
+      properties:
+        total: { type: integer, format: int64, example: 100 }
+        list:
+          type: array
+          items: {}
+
+    OrderStatus:
+      type: string
+      description: |
+        订单状态：
+        - PENDING 待确认
+        - REJECTED 已拒绝（终态）
+        - CANCELLED 已取消（终态）
+        - RESERVED 待取件
+        - RENTING 租用中
+        - RETURNING 待归还确认
+        - FINISHED 已完成（终态）
+      enum: [PENDING, REJECTED, CANCELLED, RESERVED, RENTING, RETURNING, FINISHED]
+
+    ItemStatus:
+      type: string
+      enum: [ON_SHELF, OFF_SHELF, DELISTED]
+
+    # ---------- 认证 / 用户 ----------
+    RegisterRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 20
+          example: hejinquan
+        password:
+          type: string
+          minLength: 6
+          maxLength: 32
+          format: password
+        nickname: { type: string, maxLength: 50 }
+        phone:    { type: string, maxLength: 20 }
+
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string, example: wujiahao }
+        password: { type: string, format: password, example: '123456' }
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT，前端存 localStorage
+        userInfo:
+          $ref: '#/components/schemas/UserVO'
+
+    UserVO:
+      type: object
+      properties:
+        id:            { type: integer, format: int64 }
+        username:      { type: string }
+        nickname:      { type: string }
+        phone:         { type: string }
+        avatar:        { type: string, nullable: true }
+        role:          { type: string, enum: [USER, ADMIN] }
+        status:        { type: string, enum: [NORMAL, BANNED] }
+        creditScore:   { type: integer, example: 100 }
+        balance:       { type: number, format: double, example: 1000.00 }
+        frozenBalance: { type: number, format: double, example: 300.00 }
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        nickname: { type: string, maxLength: 50 }
+        phone:    { type: string, maxLength: 20 }
+        avatar:   { type: string, maxLength: 255 }
+
+    ChangePasswordRequest:
+      type: object
+      required: [oldPassword, newPassword]
+      properties:
+        oldPassword: { type: string, format: password }
+        newPassword: { type: string, format: password, minLength: 6, maxLength: 32 }
+
+    CreditVO:
+      type: object
+      properties:
+        userId:        { type: integer, format: int64 }
+        nickname:      { type: string }
+        creditScore:   { type: integer, example: 104 }
+        level:
+          type: string
+          description: 由分数推导：>=120 信用极好 / >=100 信用良好 / >=80 信用一般 / 否则 信用较差
+          enum: [信用极好, 信用良好, 信用一般, 信用较差]
+        finishedAsRenter: { type: integer, description: 作为租用人完成的订单数 }
+        finishedAsLender: { type: integer, description: 作为出租人完成的订单数 }
+        avgScore:         { type: number, format: double, description: 收到的平均评分 }
+
+    # ---------- 分类 ----------
+    CategoryVO:
+      type: object
+      properties:
+        id:     { type: integer, format: int64 }
+        name:   { type: string, example: 摄影器材 }
+        sort:   { type: integer }
+        icon:   { type: string, nullable: true }
+        status: { type: string, enum: [ENABLED, DISABLED] }
+
+    CategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name:   { type: string, maxLength: 50 }
+        sort:   { type: integer, default: 0 }
+        icon:   { type: string, maxLength: 255 }
+        status: { type: string, enum: [ENABLED, DISABLED], default: ENABLED }
+
+    # ---------- 物品 ----------
+    ItemVO:
+      type: object
+      description: 列表页用的精简物品信息
+      properties:
+        id:             { type: integer, format: int64 }
+        title:          { type: string }
+        coverImage:     { type: string, nullable: true }
+        dailyPrice:     { type: number, format: double, example: 80.00 }
+        deposit:        { type: number, format: double, example: 1500.00 }
+        location:       { type: string }
+        status:         { $ref: '#/components/schemas/ItemStatus' }
+        categoryId:     { type: integer, format: int64 }
+        categoryName:   { type: string }
+        ownerId:        { type: integer, format: int64 }
+        ownerNickname:  { type: string }
+        ownerCredit:    { type: integer, description: 出租人信用分，列表页可直接展示 }
+        viewCount:      { type: integer }
+        favoriteCount:  { type: integer }
+        favorited:      { type: boolean, description: 当前登录用户是否已收藏；未登录恒为 false }
+        createdAt:      { type: string, format: date-time }
+
+    ItemDetailVO:
+      allOf:
+        - $ref: '#/components/schemas/ItemVO'
+        - type: object
+          properties:
+            description:     { type: string }
+            images:
+              type: array
+              items: { type: string }
+            availablePeriods:
+              type: array
+              items:
+                $ref: '#/components/schemas/AvailablePeriodVO'
+            occupiedPeriods:
+              type: array
+              description: 已被他人订单占用的区间，前端据此刻度化日期选择器
+              items:
+                $ref: '#/components/schemas/AvailablePeriodVO'
+
+    ItemCreateRequest:
+      type: object
+      required: [title, categoryId, dailyPrice]
+      properties:
+        title:       { type: string, maxLength: 100, example: 佳能 EOS R6 微单相机 }
+        description: { type: string }
+        categoryId:  { type: integer, format: int64 }
+        location:    { type: string, maxLength: 100 }
+        dailyPrice:  { type: number, format: double, minimum: 0.01, example: 80.00 }
+        deposit:     { type: number, format: double, minimum: 0, default: 0, example: 1500.00 }
+        coverImage:  { type: string, maxLength: 255 }
+        images:
+          type: array
+          items: { type: string }
+        availablePeriods:
+          type: array
+          description: 发布时可一并设定可租时段
+          items:
+            $ref: '#/components/schemas/AvailablePeriodRequest'
+
+    ItemUpdateRequest:
+      type: object
+      properties:
+        title:       { type: string, maxLength: 100 }
+        description: { type: string }
+        categoryId:  { type: integer, format: int64 }
+        location:    { type: string, maxLength: 100 }
+        dailyPrice:  { type: number, format: double, minimum: 0.01 }
+        deposit:     { type: number, format: double, minimum: 0 }
+        coverImage:  { type: string, maxLength: 255 }
+        images:
+          type: array
+          items: { type: string }
+
+    AvailablePeriodVO:
+      type: object
+      properties:
+        id:        { type: integer, format: int64 }
+        startDate: { type: string, format: date, example: '2026-09-01' }
+        endDate:   { type: string, format: date, example: '2026-12-31' }
+
+    AvailablePeriodRequest:
+      type: object
+      required: [startDate, endDate]
+      properties:
+        startDate: { type: string, format: date }
+        endDate:   { type: string, format: date }
+
+    # ---------- 订单 ----------
+    OrderCreateRequest:
+      type: object
+      required: [itemId, startDate, endDate]
+      properties:
+        itemId:      { type: integer, format: int64 }
+        startDate:   { type: string, format: date, example: '2026-09-20' }
+        endDate:     { type: string, format: date, example: '2026-09-22' }
+        applyRemark: { type: string, maxLength: 255, example: 社团活动拍摄用 }
+
+    OrderVO:
+      type: object
+      properties:
+        id:            { type: integer, format: int64 }
+        orderNo:       { type: string, example: ZZX20260916007 }
+        status:        { $ref: '#/components/schemas/OrderStatus' }
+        statusLabel:   { type: string, example: 待取件 }
+        itemId:        { type: integer, format: int64 }
+        itemTitle:     { type: string }
+        itemCover:     { type: string, nullable: true }
+        ownerId:       { type: integer, format: int64 }
+        ownerNickname: { type: string }
+        renterId:      { type: integer, format: int64 }
+        renterNickname: { type: string }
+        startDate:     { type: string, format: date }
+        endDate:       { type: string, format: date }
+        days:          { type: integer }
+        dailyPrice:    { type: number, format: double }
+        rentAmount:    { type: number, format: double }
+        depositAmount: { type: number, format: double }
+        totalAmount:   { type: number, format: double }
+        applyRemark:   { type: string, nullable: true }
+        rejectReason:  { type: string, nullable: true }
+        overdue:
+          type: boolean
+          description: 动态判定：endDate < 今天 且 status = RENTING
+        reviewed:
+          type: boolean
+          description: 当前登录用户是否已评价过该订单
+        createdAt:     { type: string, format: date-time }
+        confirmedAt:   { type: string, format: date-time, nullable: true }
+        pickedAt:      { type: string, format: date-time, nullable: true }
+        returnedAt:    { type: string, format: date-time, nullable: true }
+        finishedAt:    { type: string, format: date-time, nullable: true }
+        cancelledAt:   { type: string, format: date-time, nullable: true }
+
+    # ---------- 钱包 ----------
+    WalletVO:
+      type: object
+      properties:
+        balance:       { type: number, format: double, example: 2860.00 }
+        frozenBalance: { type: number, format: double, example: 1900.00 }
+        totalAssets:
+          type: number
+          format: double
+          description: balance + frozenBalance
+          example: 4760.00
+
+    WalletTransactionVO:
+      type: object
+      properties:
+        id:           { type: integer, format: int64 }
+        type:
+          type: string
+          enum: [RECHARGE, RENT_PAY, RENT_REFUND, RENT_INCOME, DEPOSIT_FREEZE, DEPOSIT_REFUND, DEPOSIT_DEDUCT]
+        typeLabel:    { type: string, example: 冻结押金 }
+        amount:       { type: number, format: double, description: 正数收入，负数支出 }
+        balanceAfter: { type: number, format: double }
+        orderId:      { type: integer, format: int64, nullable: true }
+        orderNo:      { type: string, nullable: true }
+        remark:       { type: string, nullable: true }
+        createdAt:    { type: string, format: date-time }
+
+    # ---------- 评价 ----------
+    ReviewCreateRequest:
+      type: object
+      required: [orderId, score]
+      properties:
+        orderId: { type: integer, format: int64 }
+        score:   { type: integer, minimum: 1, maximum: 5 }
+        content: { type: string, maxLength: 500 }
+
+    ReviewVO:
+      type: object
+      properties:
+        id:             { type: integer, format: int64 }
+        orderId:        { type: integer, format: int64 }
+        reviewerId:     { type: integer, format: int64 }
+        reviewerNickname: { type: string }
+        revieweeId:     { type: integer, format: int64 }
+        role:           { type: string, enum: [LENDER, RENTER] }
+        score:          { type: integer, minimum: 1, maximum: 5 }
+        content:        { type: string, nullable: true }
+        createdAt:      { type: string, format: date-time }
+
+    # ---------- 管理端 ----------
+    AdminStatsVO:
+      type: object
+      properties:
+        userCount:       { type: integer, format: int64 }
+        bannedUserCount: { type: integer, format: int64 }
+        itemCount:       { type: integer, format: int64 }
+        onShelfCount:    { type: integer, format: int64 }
+        delistedCount:   { type: integer, format: int64 }
+        orderCount:      { type: integer, format: int64 }
+        finishedCount:   { type: integer, format: int64 }
+        pendingCount:
+          type: integer
+          format: int64
+          description: 待出租人确认的订单数，管理端需重点盯的量
